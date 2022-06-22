@@ -503,3 +503,103 @@ NAME            TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)        AGE
 nginx-service   NodePort   10.3.230.222   <none>        80:30081/TCP   64s
 ```
  - supprimer la CR: `kubectl delete nginxOperator/nginx-cloud-ouest -n test-nginx-operator`
+
+## 🐳  Packaging & deployment to K8s
+ - la branche `09-package-deploy` contient le résultat de cette étape
+ - arrêter le mode dev de Quarkus
+ - modifier le fichier `application.properties`:
+```properties
+quarkus.container-image.build=true
+quarkus.container-image.push=false
+quarkus.container-image.group=wilda
+quarkus.container-image.name=cloud-ouest-java-operator
+
+# set to true to automatically apply CRDs to the cluster when they get regenerated
+quarkus.operator-sdk.crd.apply=true
+# set to true to automatically generate CSV from your code
+quarkus.operator-sdk.generate-csv=false
+
+quarkus.kubernetes.namespace=cloud-ouest-java-operator
+```
+ - ajouter un fichier `src/main/kubernetes/kubernetes.yml` contenant la définition des _ClusterRole_ / _ClusterRoleBinding_ spécifiques à l'opérateur:
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+    name: service-deployment-cluster-role
+    namespace: cloud-ouest-java-operator
+rules:
+  - apiGroups:
+    - ""
+    resources:
+    - secrets
+    - serviceaccounts
+    - services  
+    verbs:
+    - "*"
+  - apiGroups:
+    - "apps"
+    verbs:
+        - "*"
+    resources:
+    - deployments
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: service-deployment-cluster-role-binding
+  namespace: cloud-ouest-java-operator
+roleRef:
+  kind: ClusterRole
+  apiGroup: rbac.authorization.k8s.io
+  name: service-deployment-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: cloud-ouest-java-operator
+    namespace: cloud-ouest-java-operator
+---
+```
+- lancer le packaging : `mvn clean package`
+- vérifier que l'image a bien été générée: : `docker images | grep cloud-ouest-java-operator`:
+    ```bash
+    wilda/cloud-ouest-java-operator          0.0.1-SNAPSHOT         97dac3e852da   5 minutes ago   232MB
+    ```
+- push de l'image : `docker login` && `docker push wilda/cloud-ouest-java-operator:0.0.1-SNAPSHOT`
+- créer le namespace `cloud-ouest-java-operator`: `kubectl create ns cloud-ouest-java-operator`
+- si nécessaire créer la CRD: `kubectl apply -f ./target/kubernetes/nginxoperators.fr.wilda-v1.yml`
+- appliquer le manifest créé : `kubectl apply -f ./target/kubernetes/kubernetes.yml`
+- vérifier que tout va bien:
+```bash
+$ kubectl get pod -n cloud-ouest-java-operator
+
+NAME                                         READY   STATUS    RESTARTS   AGE
+cloud-ouest-java-operator-77bf758cf5-t4pcx   1/1     Running   0          51s    
+
+$ kubectl logs cloud-ouest-java-operator-77bf758cf5-t4pcx -n cloud-ouest-java-operator
+```bash
+kubectl logs cloud-ouest-java-operator-77bf758cf5-t4pcx -n cloud-ouest-java-operator
+
+__  ____  __  _____   ___  __ ____  ______ 
+ --/ __ \/ / / / _ | / _ \/ //_/ / / / __/ 
+ -/ /_/ / /_/ / __ |/ , _/ ,< / /_/ /\ \   
+--\___\_\____/_/ |_/_/|_/_/|_|\____/___/   
+2022-06-22 15:16:01,506 INFO  [io.jav.ope.Operator] (main) Registered reconciler: 'nginxoperatorreconciler' for resource: 'class wilda.fr.NginxOperator' for namespace(s): [all namespaces]
+2022-06-22 15:16:01,529 INFO  [io.qua.ope.run.AppEventListener] (main) Quarkus Java Operator SDK extension 3.0.8 (commit: ef221b3 on branch: ef221b39cd8eb90fdc88fe85d742d669195727c0) built on Wed Jun 08 13:55:41 GMT 2022
+2022-06-22 15:16:01,530 INFO  [io.jav.ope.Operator] (main) Operator SDK 2.1.4 (commit: 5af3fec) built on Thu Apr 07 08:31:06 GMT 2022 starting...
+2022-06-22 15:16:01,530 INFO  [io.jav.ope.Operator] (main) Client version: 5.12.2
+👀 Create watcher on service 👀
+2022-06-22 15:16:02,758 INFO  [io.quarkus] (main) cloud-ouest-java-operator 0.0.1-SNAPSHOT on JVM (powered by Quarkus 2.7.6.Final) started in 3.989s. Listening on: http://0.0.0.0:8080
+2022-06-22 15:16:02,759 INFO  [io.quarkus] (main) Profile prod activated. 
+2022-06-22 15:16:02,760 INFO  [io.quarkus] (main) Installed features: [cdi, kubernetes, kubernetes-client, micrometer, openshift-client, operator-sdk, smallrye-context-propagation, smallrye-health, vertx]
+```
+- tester l'opérateur en créant une CR: `kubectl apply -f ./src/test/resources/cr-test-nginx-operator.yaml -n test-nginx-operator`
+- puis en la supprimant: `kubectl delete nginxOperator/nginx-cloud-ouest -n test-nginx-operator`
+- et constater que tout va bien:
+```bash
+  🛠️  Create / update Nginx resource operator ! 🛠️                                                                                   │
+  🛠️  Create / update Nginx resource operator ! 🛠️                                                                                   │
+  💀 Delete Nginx resource operator ! 💀      
+```
+- supprimer l'opérateur si souhaité: `kubectl delete -f ./target/kubernetes/kubernetes.yml`
+- supprimer les namespaces: `kubectl delete ns test-nginx-operator cloud-ouest-java-operator test-helloworld-operator`
+- supprimer la crd: `kubectl delete crds/nginxoperators.fr.wilda`
