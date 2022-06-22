@@ -99,3 +99,28 @@ spec:
     subresources:
       status: {}
 ```
+
+## 📝 CRD auto apply
+ - la branche `03-auto-apply-crd` contient le résultat de cette étape
+ - changer le paramétrage permettant la création / automatique de la CRD dans le `application.properties` (cela va permettre de ne plus avoir l'exception):
+```properties
+# set to true to automatically apply CRDs to the cluster when they get regenerated
+quarkus.operator-sdk.crd.apply=true
+```
+ - arrêter et relancer l'opérateur en mode `dev` : `mvn quarkus:dev`:
+```bash
+2022-06-22 15:18:49,877 INFO  [io.qua.ope.run.OperatorProducer] (Quarkus Main Thread) Applied v1 CRD named 'nginxoperators.fr.wilda' from /Users/stef/Talks/java-operator/cloud-ouest-java-operator/target/kubernetes/nginxoperators.fr.wilda-v1.yml
+2022-06-22 15:18:49,879 INFO  [io.jav.ope.Operator] (Quarkus Main Thread) Registered reconciler: 'nginxoperatorreconciler' for resource: 'class wilda.fr.NginxOperator' for namespace(s): [all namespaces]
+2022-06-22 15:18:49,879 INFO  [io.qua.ope.run.AppEventListener] (Quarkus Main Thread) Quarkus Java Operator SDK extension 3.0.8 (commit: ef221b3 on branch: ef221b39cd8eb90fdc88fe85d742d669195727c0) built on Wed Jun 08 15:55:41 CEST 2022
+2022-06-22 15:18:49,879 INFO  [io.jav.ope.Operator] (Quarkus Main Thread) Operator SDK 2.1.4 (commit: 5af3fec) built on Thu Apr 07 10:31:06 CEST 2022 starting...
+2022-06-22 15:18:49,880 INFO  [io.jav.ope.Operator] (Quarkus Main Thread) Client version: 5.12.2
+2022-06-22 15:18:54,337 INFO  [io.quarkus] (Quarkus Main Thread) cloud-ouest-java-operator 0.0.1-SNAPSHOT on JVM (powered by Quarkus 2.7.6.Final) started in 10.555s. Listening on: http://localhost:8080
+2022-06-22 15:18:54,337 INFO  [io.quarkus] (Quarkus Main Thread) Profile dev activated. Live Coding activated.
+2022-06-22 15:18:54,337 INFO  [io.quarkus] (Quarkus Main Thread) Installed features: [cdi, kubernetes, kubernetes-client, micrometer, openshift-client, operator-sdk, smallrye-context-propagation, smallrye-health, vertx]
+```
+  - vérifier que la CRD a bien été créée : `kubectl get crds nginxoperators.fr.wilda`
+```bash
+$ kubectl get crds nginxoperators.fr.wilda
+NAME                      CREATED AT
+nginxoperators.fr.wilda   2022-03-08T12:46:49Z
+```
